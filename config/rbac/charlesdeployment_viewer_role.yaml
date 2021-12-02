@@ -1,0 +1,20 @@
+# permissions for end users to view charlesdeployments.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: charlesdeployment-viewer-role
+rules:
+- apiGroups:
+  - io.charlescd.my.domain
+  resources:
+  - charlesdeployments
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - io.charlescd.my.domain
+  resources:
+  - charlesdeployments/status
+  verbs:
+  - get

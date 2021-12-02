@@ -1,0 +1,6 @@
+apiVersion: io.charlescd.my.domain/v1beta1
+kind: CharlesDeployment
+metadata:
+  name: charlesdeployment-sample
+spec:
+  # Add fields here

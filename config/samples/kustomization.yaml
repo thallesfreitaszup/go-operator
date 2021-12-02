@@ -1,0 +1,4 @@
+## Append samples you want in your CSV to this file as resources ##
+resources:
+- io.charlescd_v1beta1_charlesdeployment.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples
