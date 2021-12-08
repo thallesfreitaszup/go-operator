@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta1
+package v1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,13 +29,28 @@ type CharlesDeploymentSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of CharlesDeployment. Edit charlesdeployment_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Components []Component `json:"components,omitempty"`
 }
 
 // CharlesDeploymentStatus defines the observed state of CharlesDeployment
 type CharlesDeploymentStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+}
+
+type Component struct {
+	Name           string  `json:"name"`
+	Image          string  `json:"image"`
+	Chart          string  `json:"chart"`
+	Provider       string  `json:"provider"`
+	Namespace      string  `json:"namespace"`
+	ChildResources []Child `json:"child_resources,omitempty"`
+}
+
+type Child struct {
+	ApiVersion string
+	Name       string
+	Plural     string
 }
 
 //+kubebuilder:object:root=true

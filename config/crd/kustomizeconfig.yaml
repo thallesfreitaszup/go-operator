@@ -6,13 +6,13 @@ nameReference:
   - kind: CustomResourceDefinition
     version: v1
     group: apiextensions.k8s.io
-    path: spec/conversion/webhook/clientConfig/service/name
+    path: spec/conversion/webhook/clientConfig/k8s/name
 
 namespace:
 - kind: CustomResourceDefinition
   version: v1
   group: apiextensions.k8s.io
-  path: spec/conversion/webhook/clientConfig/service/namespace
+  path: spec/conversion/webhook/clientConfig/k8s/namespace
   create: false
 
 varReference:

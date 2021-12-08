@@ -18,19 +18,36 @@ package controllers
 
 import (
 	"context"
-
+	"errors"
+	"github.com/prometheus/common/log"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	_ "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/dynamic/dynamicinformer"
+	"k8s.io/client-go/dynamic/dynamiclister"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
+	iocharlescdv1beta1 "operator-sdk/api/v1"
+	"operator-sdk/internal/k8s"
+	"operator-sdk/internal/kustomize"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	iocharlescdv1beta1 "operator-sdk/api/v1beta1"
 )
 
-// CharlesDeploymentReconciler reconciles a CharlesDeployment object
-type CharlesDeploymentReconciler struct {
+// CharlesDeploymentController reconciles a CharlesDeployment object
+type CharlesDeploymentController struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme                 *runtime.Scheme
+	Informers              map[string]informers.GenericInformer
+	Queue                  workqueue.RateLimitingInterface
+	DynamicClient          dynamic.Interface
+	DynamicService         k8s.DynamicService
+	DynamicInformerFactory dynamicinformer.DynamicSharedInformerFactory
+	ChildInformerHandler   cache.ResourceEventHandler
+	CharlesLister          dynamiclister.Lister
 }
 
 //+kubebuilder:rbac:groups=io.charlescd.my.domain,resources=charlesdeployments,verbs=get;list;watch;create;update;patch;delete
@@ -46,17 +63,187 @@ type CharlesDeploymentReconciler struct {
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.10.0/pkg/reconcile
-func (r *CharlesDeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
-
-	// your logic here
+func (cd *CharlesDeploymentController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	err := cd.Sync(req.NamespacedName)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *CharlesDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (cd *CharlesDeploymentController) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&iocharlescdv1beta1.CharlesDeployment{}).
-		Complete(r)
+		Complete(cd)
+}
+
+func (cd *CharlesDeploymentController) Sync(key client.ObjectKey) error {
+	charlesDeployment := &iocharlescdv1beta1.CharlesDeployment{}
+
+	err := cd.Get(context.TODO(), key, charlesDeployment)
+	if err != nil {
+		return err
+	}
+	err = cd.SyncComponents(charlesDeployment.Spec.Components)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (cd *CharlesDeploymentController) getNotSyncedComponents(components []iocharlescdv1beta1.Component) []iocharlescdv1beta1.Component {
+	notSyncComponents := make([]iocharlescdv1beta1.Component, 0)
+	for _, component := range components {
+		if component.ChildResources == nil || len(component.ChildResources) == 0 || cd.NotSyncChildren(component) {
+			notSyncComponents = append(notSyncComponents, component)
+		}
+
+	}
+	return notSyncComponents
+}
+
+func (cd *CharlesDeploymentController) NotSyncChildren(component iocharlescdv1beta1.Component) bool {
+	//for _, child := range component.ChildResources {
+	//	if r.Client.Get()
+	//}
+	return true
+}
+
+func (cd *CharlesDeploymentController) SyncComponents(components []iocharlescdv1beta1.Component) error {
+	for _, component := range components {
+		err := cd.createCharlesComponent(component)
+		if err != nil {
+			return err
+		}
+		//for _, v := range component.ChildResources {
+		//	registerChildInformer(v)
+		//}
+	}
+	return nil
+}
+
+func (cd *CharlesDeploymentController) Start() error {
+	for cd.processNextWorkItem() {
+	}
+	return errors.New("error processing  item")
+}
+
+func (cd *CharlesDeploymentController) processNextWorkItem() bool {
+	key, stop := cd.Queue.Get()
+	if stop {
+		return false
+	}
+	defer cd.Queue.Done(key)
+	namespace, name, err := cache.SplitMetaNamespaceKey(key.(string))
+	if err != nil {
+		log.Error("Error getting object key", err)
+		return false
+	}
+	err = cd.Sync(client.ObjectKey{Name: name, Namespace: namespace})
+	if err != nil {
+		return true
+	}
+	cd.Queue.Forget(key)
+	return true
+}
+
+func registerChildInformer(v iocharlescdv1beta1.Child) {
+	//informers.NewSharedInformerFactory()
+}
+
+func (cd *CharlesDeploymentController) createCharlesComponent(component iocharlescdv1beta1.Component) error {
+	var unstructured unstructured.Unstructured
+	kustomizeWrapper := kustomize.New()
+	response, err := kustomizeWrapper.Kustomizer.Run(kustomizeWrapper.Filesys, component.Chart)
+	if err != nil {
+		return err
+	}
+	resources := response.Resources()
+
+	for _, resource := range resources {
+		resourceBytes, err := json.Marshal(resource)
+		if err != nil {
+			return err
+		}
+		err = json.Unmarshal(resourceBytes, &unstructured)
+		if err != nil {
+			return err
+		}
+		err = cd.DynamicService.Create(unstructured)
+		if err != nil {
+			return err
+		}
+		cd.createInformerForResource(unstructured)
+	}
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (cd *CharlesDeploymentController) createInformerForResource(u unstructured.Unstructured) {
+	schema := cd.DynamicService.GetGroupVersion(u)
+	informer := cd.DynamicInformerFactory.ForResource(schema)
+	informer.Informer().AddEventHandler(cd.childInformerHandler())
+}
+
+func (cd *CharlesDeploymentController) childInformerHandler() cache.ResourceEventHandler {
+	return &cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			resource := obj.(unstructured.Unstructured)
+			ownerRefs := resource.GetOwnerReferences()
+
+			for _, ownerRef := range ownerRefs {
+				if ownerRef.Kind == "CharlesDeployment" {
+					charlesDeployment, err := cd.CharlesLister.Get(ownerRef.Name)
+					if err != nil {
+						return
+					}
+					key, err := cache.MetaNamespaceKeyFunc(charlesDeployment)
+					if err != nil {
+						return
+					}
+					cd.Queue.Add(key)
+				}
+			}
+		},
+		DeleteFunc: func(obj interface{}) {
+			resource := obj.(unstructured.Unstructured)
+			ownerRefs := resource.GetOwnerReferences()
+
+			for _, ownerRef := range ownerRefs {
+				if ownerRef.Kind == "CharlesDeployment" {
+					charlesDeployment, err := cd.CharlesLister.Get(ownerRef.Name)
+					if err != nil {
+						return
+					}
+					key, err := cache.MetaNamespaceKeyFunc(charlesDeployment)
+					if err != nil {
+						return
+					}
+					cd.Queue.Add(key)
+				}
+			}
+		},
+		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
+			resource := oldObj.(unstructured.Unstructured)
+			ownerRefs := resource.GetOwnerReferences()
+
+			for _, ownerRef := range ownerRefs {
+				if ownerRef.Kind == "CharlesDeployment" {
+					charlesDeployment, err := cd.CharlesLister.Get(ownerRef.Name)
+					if err != nil {
+						return
+					}
+					key, err := cache.MetaNamespaceKeyFunc(charlesDeployment)
+					if err != nil {
+						return
+					}
+					cd.Queue.Add(key)
+				}
+			}
+		},
+	}
 }

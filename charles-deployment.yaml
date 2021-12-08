@@ -1,0 +1,12 @@
+apiVersion: charlescd.io/v1
+kind: CharlesDeployment
+metadata:
+  name: deploy-test
+
+spec:
+  components:
+    - name: quiz-app-backend
+      image: thallesf/quiz-app:1.0
+      chart: https://github.com/thallesfreitaszup/kustomize-demo/overlays/dev
+      provider: GITHUB
+      namespace: default
