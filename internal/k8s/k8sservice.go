@@ -19,7 +19,7 @@ type DynamicService struct {
 func (s DynamicService) Create(resource unstructured.Unstructured) error {
 
 	resSchema := s.GetGroupVersion(resource)
-	alreadyCreatedResource, err := s.Client.Resource(resSchema).Namespace(resource.GetNamespace()).Get(context.TODO(), resource.GetName(), v1.GetOptions{})
+	alreadyCreatedResource, err := s.GetResource(resource)
 	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
@@ -38,4 +38,9 @@ func (s DynamicService) GetGroupVersion(resource unstructured.Unstructured) sche
 	plural := fmt.Sprintf("%s%s", strings.ToLower(resource.GetKind()), "s")
 
 	return schema.GroupVersionResource{Version: resource.GroupVersionKind().Version, Group: resource.GroupVersionKind().Group, Resource: plural}
+}
+
+func (s DynamicService) GetResource(resource unstructured.Unstructured) (*unstructured.Unstructured, error) {
+	resSchema := s.GetGroupVersion(resource)
+	return s.Client.Resource(resSchema).Namespace(resource.GetNamespace()).Get(context.TODO(), resource.GetName(), v1.GetOptions{})
 }

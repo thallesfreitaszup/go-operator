@@ -89,7 +89,7 @@ func (cd *CharlesDeploymentController) Sync(key client.ObjectKey) error {
 	if err != nil {
 		return err
 	}
-	err = cd.SyncComponents(charlesDeployment)
+	err = cd.SyncComponents(*charlesDeployment)
 	if err != nil {
 		return err
 	}
@@ -118,6 +118,7 @@ func (cd *CharlesDeploymentController) SyncComponents(charlesDeployment iocharle
 	for _, component := range charlesDeployment.Spec.Components {
 		err := cd.createCharlesComponent(component, charlesDeployment)
 		if err != nil {
+			log.Info("Error creating charles component", err)
 			return err
 		}
 		//for _, v := range component.ChildResources {
@@ -152,14 +153,10 @@ func (cd *CharlesDeploymentController) processNextWorkItem() bool {
 	return true
 }
 
-func registerChildInformer(v iocharlescdv1beta1.Child) {
-	//informers.NewSharedInformerFactory()
-}
-
 func (cd *CharlesDeploymentController) createCharlesComponent(component iocharlescdv1beta1.Component, charlesDeployment iocharlescdv1beta1.CharlesDeployment) error {
 	var unstructured unstructured.Unstructured
 	kustomizeWrapper := kustomize.New()
-	response, err := kustomizeWrapper.Kustomizer.Run(kustomizeWrapper.Filesys, component.Chart)
+	response, err := kustomizeWrapper.RenderManifests(component.Chart)
 	if err != nil {
 		return err
 	}
@@ -179,10 +176,7 @@ func (cd *CharlesDeploymentController) createCharlesComponent(component iocharle
 		if err != nil {
 			return err
 		}
-		cd.createInformerForResource(unstructured)
-	}
-	if err != nil {
-		return err
+		//cd.createInformerForResource(unstructured)
 	}
 	return nil
 }
