@@ -19,7 +19,9 @@ package controllers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/prometheus/common/log"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	_ "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -30,6 +32,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/utils/pointer"
 	iocharlescdv1beta1 "operator-sdk/api/v1"
 	"operator-sdk/internal/k8s"
 	"operator-sdk/internal/kustomize"
@@ -86,7 +89,7 @@ func (cd *CharlesDeploymentController) Sync(key client.ObjectKey) error {
 	if err != nil {
 		return err
 	}
-	err = cd.SyncComponents(charlesDeployment.Spec.Components)
+	err = cd.SyncComponents(charlesDeployment)
 	if err != nil {
 		return err
 	}
@@ -111,9 +114,9 @@ func (cd *CharlesDeploymentController) NotSyncChildren(component iocharlescdv1be
 	return true
 }
 
-func (cd *CharlesDeploymentController) SyncComponents(components []iocharlescdv1beta1.Component) error {
-	for _, component := range components {
-		err := cd.createCharlesComponent(component)
+func (cd *CharlesDeploymentController) SyncComponents(charlesDeployment iocharlescdv1beta1.CharlesDeployment) error {
+	for _, component := range charlesDeployment.Spec.Components {
+		err := cd.createCharlesComponent(component, charlesDeployment)
 		if err != nil {
 			return err
 		}
@@ -153,7 +156,7 @@ func registerChildInformer(v iocharlescdv1beta1.Child) {
 	//informers.NewSharedInformerFactory()
 }
 
-func (cd *CharlesDeploymentController) createCharlesComponent(component iocharlescdv1beta1.Component) error {
+func (cd *CharlesDeploymentController) createCharlesComponent(component iocharlescdv1beta1.Component, charlesDeployment iocharlescdv1beta1.CharlesDeployment) error {
 	var unstructured unstructured.Unstructured
 	kustomizeWrapper := kustomize.New()
 	response, err := kustomizeWrapper.Kustomizer.Run(kustomizeWrapper.Filesys, component.Chart)
@@ -171,6 +174,7 @@ func (cd *CharlesDeploymentController) createCharlesComponent(component iocharle
 		if err != nil {
 			return err
 		}
+		createOwnerReference(&unstructured, charlesDeployment)
 		err = cd.DynamicService.Create(unstructured)
 		if err != nil {
 			return err
@@ -183,6 +187,20 @@ func (cd *CharlesDeploymentController) createCharlesComponent(component iocharle
 	return nil
 }
 
+func createOwnerReference(u *unstructured.Unstructured, deployment iocharlescdv1beta1.CharlesDeployment) {
+	newOwnerReference := v1.OwnerReference{
+		APIVersion:         deployment.APIVersion,
+		Name:               deployment.Name,
+		Kind:               deployment.Kind,
+		UID:                deployment.GetUID(),
+		Controller:         pointer.Bool(true),
+		BlockOwnerDeletion: pointer.Bool(true),
+	}
+	ownerReferences := u.GetOwnerReferences()
+	ownerReferences = append(ownerReferences, newOwnerReference)
+	u.SetOwnerReferences(ownerReferences)
+}
+
 func (cd *CharlesDeploymentController) createInformerForResource(u unstructured.Unstructured) {
 	schema := cd.DynamicService.GetGroupVersion(u)
 	informer := cd.DynamicInformerFactory.ForResource(schema)
@@ -192,9 +210,10 @@ func (cd *CharlesDeploymentController) createInformerForResource(u unstructured.
 func (cd *CharlesDeploymentController) childInformerHandler() cache.ResourceEventHandler {
 	return &cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			resource := obj.(unstructured.Unstructured)
-			ownerRefs := resource.GetOwnerReferences()
 
+			resource := obj.(unstructured.Unstructured)
+			log.Info(fmt.Sprintf("Resource %s/%s created", resource.GetAPIVersion(), resource.GetName()))
+			ownerRefs := resource.GetOwnerReferences()
 			for _, ownerRef := range ownerRefs {
 				if ownerRef.Kind == "CharlesDeployment" {
 					charlesDeployment, err := cd.CharlesLister.Get(ownerRef.Name)
@@ -212,7 +231,7 @@ func (cd *CharlesDeploymentController) childInformerHandler() cache.ResourceEven
 		DeleteFunc: func(obj interface{}) {
 			resource := obj.(unstructured.Unstructured)
 			ownerRefs := resource.GetOwnerReferences()
-
+			log.Info(fmt.Sprintf("Resource %s/%s deleted", resource.GetAPIVersion(), resource.GetName()))
 			for _, ownerRef := range ownerRefs {
 				if ownerRef.Kind == "CharlesDeployment" {
 					charlesDeployment, err := cd.CharlesLister.Get(ownerRef.Name)
@@ -230,7 +249,7 @@ func (cd *CharlesDeploymentController) childInformerHandler() cache.ResourceEven
 		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
 			resource := oldObj.(unstructured.Unstructured)
 			ownerRefs := resource.GetOwnerReferences()
-
+			log.Info(fmt.Sprintf("Resource %s/%s deleted", resource.GetAPIVersion(), resource.GetName()))
 			for _, ownerRef := range ownerRefs {
 				if ownerRef.Kind == "CharlesDeployment" {
 					charlesDeployment, err := cd.CharlesLister.Get(ownerRef.Name)
