@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"fmt"
 	iocharlescdv1 "github.com/thalleslmF/go-operator/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -11,6 +12,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/pointer"
+	"strings"
 	"time"
 )
 
@@ -41,4 +43,10 @@ func CreateOwnerReference(u *unstructured.Unstructured, deployment iocharlescdv1
 	ownerReferences := u.GetOwnerReferences()
 	ownerReferences = append(ownerReferences, newOwnerReference)
 	u.SetOwnerReferences(ownerReferences)
+}
+
+func GetGroupVersion(resource unstructured.Unstructured) schema.GroupVersionResource {
+	plural := fmt.Sprintf("%s%s", strings.ToLower(resource.GetKind()), "s")
+
+	return schema.GroupVersionResource{Version: resource.GroupVersionKind().Version, Group: resource.GroupVersionKind().Group, Resource: plural}
 }

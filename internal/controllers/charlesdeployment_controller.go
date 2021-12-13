@@ -181,7 +181,7 @@ func (cd *CharlesDeploymentController) createCharlesComponent(component iocharle
 }
 
 func (cd *CharlesDeploymentController) createInformerForResource(u unstructured.Unstructured) {
-	schema := cd.DynamicService.GetGroupVersion(u)
+	schema := common.GetGroupVersion(u)
 	_, ok := cd.Informers[schema.String()]
 	if !ok {
 		log.Info("Creating informer for resource ", schema)
