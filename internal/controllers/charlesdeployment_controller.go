@@ -21,6 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/prometheus/common/log"
+	iocharlescdv1beta1 "go-operator/api/v1"
+	"go-operator/internal/common"
+	"go-operator/internal/k8s"
+	"go-operator/internal/kustomize"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	_ "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -32,10 +36,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/pointer"
-	iocharlescdv1beta1 "operator-sdk/api/v1"
-	"operator-sdk/internal/common"
-	"operator-sdk/internal/k8s"
-	"operator-sdk/internal/kustomize"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )

@@ -20,14 +20,14 @@ import (
 	"flag"
 	"fmt"
 	"github.com/prometheus/common/log"
+	"go-operator/internal/controllers"
+	"go-operator/internal/k8s"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamiclister"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-	"operator-sdk/internal/controllers"
-	"operator-sdk/internal/k8s"
 	"os"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -35,10 +35,10 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	iocharlescdv1beta1 "go-operator/api/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	iocharlescdv1beta1 "operator-sdk/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
