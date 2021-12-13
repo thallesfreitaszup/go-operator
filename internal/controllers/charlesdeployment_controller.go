@@ -21,10 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/prometheus/common/log"
-	iocharlescdv1beta1 "go-operator/api/v1"
-	"go-operator/internal/common"
-	"go-operator/internal/k8s"
-	"go-operator/internal/kustomize"
+	iocharlescdv1 "github.com/thalleslmF/go-operator/api/v1"
+	"github.com/thalleslmF/go-operator/internal/common"
+	"github.com/thalleslmF/go-operator/internal/k8s"
+	"github.com/thalleslmF/go-operator/internal/kustomize"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	_ "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -79,12 +79,12 @@ func (cd *CharlesDeploymentController) Reconcile(ctx context.Context, req ctrl.R
 // SetupWithManager sets up the controller with the Manager.
 func (cd *CharlesDeploymentController) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&iocharlescdv1beta1.CharlesDeployment{}).
+		For(&iocharlescdv1.CharlesDeployment{}).
 		Complete(cd)
 }
 
 func (cd *CharlesDeploymentController) Sync(key client.ObjectKey) error {
-	charlesDeployment := &iocharlescdv1beta1.CharlesDeployment{}
+	charlesDeployment := &iocharlescdv1.CharlesDeployment{}
 
 	err := cd.Get(context.TODO(), key, charlesDeployment)
 	log.Info("Start reconcile for ", charlesDeployment)
@@ -98,8 +98,8 @@ func (cd *CharlesDeploymentController) Sync(key client.ObjectKey) error {
 	return nil
 }
 
-func (cd *CharlesDeploymentController) getNotSyncedComponents(components []iocharlescdv1beta1.Component) []iocharlescdv1beta1.Component {
-	notSyncComponents := make([]iocharlescdv1beta1.Component, 0)
+func (cd *CharlesDeploymentController) getNotSyncedComponents(components []iocharlescdv1.Component) []iocharlescdv1.Component {
+	notSyncComponents := make([]iocharlescdv1.Component, 0)
 	for _, component := range components {
 		if component.ChildResources == nil || len(component.ChildResources) == 0 || cd.NotSyncChildren(component) {
 			notSyncComponents = append(notSyncComponents, component)
@@ -109,14 +109,14 @@ func (cd *CharlesDeploymentController) getNotSyncedComponents(components []iocha
 	return notSyncComponents
 }
 
-func (cd *CharlesDeploymentController) NotSyncChildren(component iocharlescdv1beta1.Component) bool {
+func (cd *CharlesDeploymentController) NotSyncChildren(component iocharlescdv1.Component) bool {
 	//for _, child := range component.ChildResources {
 	//	if r.Client.Get()
 	//}
 	return true
 }
 
-func (cd *CharlesDeploymentController) SyncComponents(charlesDeployment iocharlescdv1beta1.CharlesDeployment) error {
+func (cd *CharlesDeploymentController) SyncComponents(charlesDeployment iocharlescdv1.CharlesDeployment) error {
 	for _, component := range charlesDeployment.Spec.Components {
 		err := cd.createCharlesComponent(component, charlesDeployment)
 		if err != nil {
@@ -152,7 +152,7 @@ func (cd *CharlesDeploymentController) processNextWorkItem() bool {
 	return true
 }
 
-func (cd *CharlesDeploymentController) createCharlesComponent(component iocharlescdv1beta1.Component, charlesDeployment iocharlescdv1beta1.CharlesDeployment) error {
+func (cd *CharlesDeploymentController) createCharlesComponent(component iocharlescdv1.Component, charlesDeployment iocharlescdv1.CharlesDeployment) error {
 	var unstructured unstructured.Unstructured
 	kustomizeWrapper := kustomize.New()
 	response, err := kustomizeWrapper.RenderManifests(component.Chart)
@@ -183,7 +183,7 @@ func (cd *CharlesDeploymentController) createCharlesComponent(component iocharle
 	return nil
 }
 
-func createOwnerReference(u *unstructured.Unstructured, deployment iocharlescdv1beta1.CharlesDeployment) {
+func createOwnerReference(u *unstructured.Unstructured, deployment iocharlescdv1.CharlesDeployment) {
 	newOwnerReference := v1.OwnerReference{
 		APIVersion:         deployment.APIVersion,
 		Name:               deployment.Name,
@@ -216,7 +216,7 @@ func (cd *CharlesDeploymentController) createInformerForResource(u unstructured.
 func (cd *CharlesDeploymentController) buildInformerHandler() cache.ResourceEventHandler {
 	return &cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			charlesDeployment := &iocharlescdv1beta1.CharlesDeployment{}
+			charlesDeployment := &iocharlescdv1.CharlesDeployment{}
 			resource := obj.(*unstructured.Unstructured)
 			log.Info(fmt.Sprintf("Resource %s/%s created", resource.GroupVersionKind(), resource.GetName()))
 			ownerRefs := resource.GetOwnerReferences()
@@ -238,7 +238,7 @@ func (cd *CharlesDeploymentController) buildInformerHandler() cache.ResourceEven
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
-			charlesDeployment := &iocharlescdv1beta1.CharlesDeployment{}
+			charlesDeployment := &iocharlescdv1.CharlesDeployment{}
 			resource := obj.(*unstructured.Unstructured)
 			ownerRefs := resource.GetOwnerReferences()
 			log.Info(fmt.Sprintf("Resource %s/%s deleted", resource.GroupVersionKind(), resource.GetName()))
@@ -261,7 +261,7 @@ func (cd *CharlesDeploymentController) buildInformerHandler() cache.ResourceEven
 			}
 		},
 		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
-			charlesDeployment := &iocharlescdv1beta1.CharlesDeployment{}
+			charlesDeployment := &iocharlescdv1.CharlesDeployment{}
 			resource := oldObj.(*unstructured.Unstructured)
 			ownerRefs := resource.GetOwnerReferences()
 			log.Info(fmt.Sprintf("Resource %s/%s updated", resource.GroupVersionKind(), resource.GetName()))

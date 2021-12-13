@@ -1,4 +1,4 @@
-module go-operator
+module github.com/thalleslmF/go-operator
 
 go 1.16
 
