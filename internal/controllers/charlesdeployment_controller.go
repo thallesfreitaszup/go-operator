@@ -38,7 +38,6 @@ import (
 	"operator-sdk/internal/kustomize"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"time"
 )
 
 // CharlesDeploymentController reconciles a CharlesDeployment object
@@ -198,17 +197,15 @@ func createOwnerReference(u *unstructured.Unstructured, deployment iocharlescdv1
 }
 
 func (cd *CharlesDeploymentController) createInformerForResource(u unstructured.Unstructured) {
-	resyncPeriod := 1 * time.Second
-	context, _ := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	schema := cd.DynamicService.GetGroupVersion(u)
 	_, ok := cd.Informers[schema.String()]
 	if !ok {
 		log.Info("Creating informer for resource ", schema)
-		cd.Informers[schema.String()] = common.BuildInformerForResource(cd.DynamicClient, schema, u.GetNamespace(), resyncPeriod, context)
+		cd.Informers[schema.String()] = common.BuildInformerForResource(cd.DynamicClient, schema, context.TODO())
 		createdInformer, _ := cd.Informers[schema.String()]
 		createdInformer.AddEventHandler(cd.buildInformerHandler())
-		go createdInformer.Run(context.Done())
-		sync := cache.WaitForCacheSync(context.Done(), createdInformer.HasSynced)
+		go createdInformer.Run(context.TODO().Done())
+		sync := cache.WaitForCacheSync(context.TODO().Done(), createdInformer.HasSynced)
 		if !sync {
 			log.Error("Failed to sync controller ")
 		}
