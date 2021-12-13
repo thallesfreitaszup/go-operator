@@ -19,17 +19,18 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/prometheus/common/log"
+	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/dynamic/dynamiclister"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-	"log"
-	"operator-sdk/controllers"
+	"operator-sdk/internal/controllers"
 	"operator-sdk/internal/k8s"
 	"os"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -39,8 +40,6 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	iocharlescdv1beta1 "operator-sdk/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	//+kubebuilder:scaffold:imports
-	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -92,12 +91,13 @@ func main() {
 	}
 	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
 	charlesController := &controllers.CharlesDeploymentController{
-		Client:                 mgr.GetClient(),
-		Scheme:                 mgr.GetScheme(),
-		Queue:                  workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
-		DynamicService:         k8s.DynamicService{Client: dynClient},
-		DynamicInformerFactory: dynamicinformer.NewDynamicSharedInformerFactory(dynClient, 1),
-		CharlesLister:          dynamiclister.New(indexer, schema.GroupVersionResource{Group: " charlescd.io", Version: "v1", Resource: "charlesdeployments"}),
+		Client:         mgr.GetClient(),
+		Scheme:         mgr.GetScheme(),
+		Queue:          workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+		DynamicService: k8s.DynamicService{Client: dynClient},
+		CharlesLister:  dynamiclister.New(indexer, schema.GroupVersionResource{Group: "charlescd.io", Version: "v1", Resource: "charlesdeployments"}),
+		Informers:      make(map[string]cache.SharedIndexInformer),
+		DynamicClient:  dynClient,
 	}
 
 	if err = (charlesController).SetupWithManager(mgr); err != nil {
@@ -118,5 +118,4 @@ func main() {
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
-	//charlesController.Start()
 }

@@ -24,7 +24,7 @@ func (s DynamicService) Create(resource unstructured.Unstructured) error {
 		return err
 	}
 	if alreadyCreatedResource != nil {
-		log.Info("Resource already created", resource.GetName())
+		log.Info(fmt.Sprintf("Resource %s/%s already created", resource.GroupVersionKind(), resource.GetName()))
 		return nil
 	}
 	_, err = s.Client.Resource(resSchema).Namespace(resource.GetNamespace()).Create(context.TODO(), &resource, v1.CreateOptions{})
