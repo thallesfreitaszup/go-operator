@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	iocharlescdv1 "github.com/thalleslmF/go-operator/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -9,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/utils/pointer"
 	"time"
 )
 
@@ -26,4 +28,17 @@ func BuildInformerForResource(client dynamic.Interface, gvr schema.GroupVersionR
 		time.Minute,
 		cache.Indexers{},
 	)
+}
+func CreateOwnerReference(u *unstructured.Unstructured, deployment iocharlescdv1.CharlesDeployment) {
+	newOwnerReference := metav1.OwnerReference{
+		APIVersion:         deployment.APIVersion,
+		Name:               deployment.Name,
+		Kind:               deployment.Kind,
+		UID:                deployment.GetUID(),
+		Controller:         pointer.Bool(true),
+		BlockOwnerDeletion: pointer.Bool(true),
+	}
+	ownerReferences := u.GetOwnerReferences()
+	ownerReferences = append(ownerReferences, newOwnerReference)
+	u.SetOwnerReferences(ownerReferences)
 }

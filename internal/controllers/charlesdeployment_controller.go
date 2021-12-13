@@ -25,7 +25,6 @@ import (
 	"github.com/thalleslmF/go-operator/internal/common"
 	"github.com/thalleslmF/go-operator/internal/k8s"
 	"github.com/thalleslmF/go-operator/internal/kustomize"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	_ "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,8 +34,6 @@ import (
 	"k8s.io/client-go/dynamic/dynamiclister"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/utils/pointer"
-
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -170,7 +167,7 @@ func (cd *CharlesDeploymentController) createCharlesComponent(component iocharle
 		if err != nil {
 			return err
 		}
-		createOwnerReference(&unstructured, charlesDeployment)
+		common.CreateOwnerReference(&unstructured, charlesDeployment)
 		err = cd.DynamicService.Create(unstructured)
 		if err != nil {
 			return err
@@ -181,20 +178,6 @@ func (cd *CharlesDeploymentController) createCharlesComponent(component iocharle
 		}
 	}
 	return nil
-}
-
-func createOwnerReference(u *unstructured.Unstructured, deployment iocharlescdv1.CharlesDeployment) {
-	newOwnerReference := v1.OwnerReference{
-		APIVersion:         deployment.APIVersion,
-		Name:               deployment.Name,
-		Kind:               deployment.Kind,
-		UID:                deployment.GetUID(),
-		Controller:         pointer.Bool(true),
-		BlockOwnerDeletion: pointer.Bool(true),
-	}
-	ownerReferences := u.GetOwnerReferences()
-	ownerReferences = append(ownerReferences, newOwnerReference)
-	u.SetOwnerReferences(ownerReferences)
 }
 
 func (cd *CharlesDeploymentController) createInformerForResource(u unstructured.Unstructured) {
