@@ -19,7 +19,6 @@ package controllers
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/prometheus/common/log"
 	iocharlescdv1 "github.com/thalleslmF/go-operator/api/v1"
 	"github.com/thalleslmF/go-operator/internal/common"
@@ -95,24 +94,6 @@ func (cd *CharlesDeploymentController) Sync(key client.ObjectKey) error {
 	return nil
 }
 
-func (cd *CharlesDeploymentController) getNotSyncedComponents(components []iocharlescdv1.Component) []iocharlescdv1.Component {
-	notSyncComponents := make([]iocharlescdv1.Component, 0)
-	for _, component := range components {
-		if component.ChildResources == nil || len(component.ChildResources) == 0 || cd.NotSyncChildren(component) {
-			notSyncComponents = append(notSyncComponents, component)
-		}
-
-	}
-	return notSyncComponents
-}
-
-func (cd *CharlesDeploymentController) NotSyncChildren(component iocharlescdv1.Component) bool {
-	//for _, child := range component.ChildResources {
-	//	if r.Client.Get()
-	//}
-	return true
-}
-
 func (cd *CharlesDeploymentController) SyncComponents(charlesDeployment iocharlescdv1.CharlesDeployment) error {
 	for _, component := range charlesDeployment.Spec.Components {
 		err := cd.createCharlesComponent(component, charlesDeployment)
@@ -172,98 +153,6 @@ func (cd *CharlesDeploymentController) createCharlesComponent(component iocharle
 		if err != nil {
 			return err
 		}
-		cd.createInformerForResource(unstructured)
-		if err != nil {
-			return err
-		}
 	}
 	return nil
-}
-
-func (cd *CharlesDeploymentController) createInformerForResource(u unstructured.Unstructured) {
-	schema := common.GetGroupVersion(u)
-	_, ok := cd.Informers[schema.String()]
-	if !ok {
-		log.Info("Creating informer for resource ", schema)
-		cd.Informers[schema.String()] = common.BuildInformerForResource(cd.DynamicClient, schema, context.TODO())
-		createdInformer, _ := cd.Informers[schema.String()]
-		createdInformer.AddEventHandler(cd.buildInformerHandler())
-		go createdInformer.Run(context.TODO().Done())
-		sync := cache.WaitForCacheSync(context.TODO().Done(), createdInformer.HasSynced)
-		if !sync {
-			log.Error("Failed to sync controller ")
-		}
-	}
-}
-
-func (cd *CharlesDeploymentController) buildInformerHandler() cache.ResourceEventHandler {
-	return &cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			charlesDeployment := &iocharlescdv1.CharlesDeployment{}
-			resource := obj.(*unstructured.Unstructured)
-			log.Info(fmt.Sprintf("Resource %s/%s created", resource.GroupVersionKind(), resource.GetName()))
-			ownerRefs := resource.GetOwnerReferences()
-			for _, ownerRef := range ownerRefs {
-				if ownerRef.Kind == "CharlesDeployment" {
-					err := cd.Get(context.TODO(), client.ObjectKey{Namespace: resource.GetNamespace(), Name: ownerRef.Name}, charlesDeployment)
-					if err != nil {
-						log.Error("Error getting charlesDeployment", err)
-						return
-					}
-					key, err := cache.MetaNamespaceKeyFunc(charlesDeployment)
-					if err != nil {
-						log.Error("Error getting key", err)
-						return
-					}
-					fmt.Printf("Resource %s queued\n", key)
-					cd.Queue.Add(key)
-				}
-			}
-		},
-		DeleteFunc: func(obj interface{}) {
-			charlesDeployment := &iocharlescdv1.CharlesDeployment{}
-			resource := obj.(*unstructured.Unstructured)
-			ownerRefs := resource.GetOwnerReferences()
-			log.Info(fmt.Sprintf("Resource %s/%s deleted", resource.GroupVersionKind(), resource.GetName()))
-			for _, ownerRef := range ownerRefs {
-				if ownerRef.Kind == "CharlesDeployment" {
-
-					err := cd.Get(context.TODO(), client.ObjectKey{Namespace: resource.GetNamespace(), Name: ownerRef.Name}, charlesDeployment)
-					if err != nil {
-						log.Error("Error getting charlesDeployment", err)
-						return
-					}
-					key, err := cache.MetaNamespaceKeyFunc(charlesDeployment)
-					if err != nil {
-						log.Error("Error getting key", err)
-						return
-					}
-					fmt.Printf("Resource %s queued\n", key)
-					cd.Queue.Add(key)
-				}
-			}
-		},
-		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
-			charlesDeployment := &iocharlescdv1.CharlesDeployment{}
-			resource := oldObj.(*unstructured.Unstructured)
-			ownerRefs := resource.GetOwnerReferences()
-			log.Info(fmt.Sprintf("Resource %s/%s updated", resource.GroupVersionKind(), resource.GetName()))
-			for _, ownerRef := range ownerRefs {
-				if ownerRef.Kind == "CharlesDeployment" {
-					err := cd.Get(context.TODO(), client.ObjectKey{Namespace: resource.GetNamespace(), Name: ownerRef.Name}, charlesDeployment)
-					if err != nil {
-						log.Error("Error getting charlesDeployment", err)
-						return
-					}
-					key, err := cache.MetaNamespaceKeyFunc(charlesDeployment)
-					if err != nil {
-						log.Error("Error getting key", err)
-						return
-					}
-					fmt.Printf("Resource %s queued\n", key)
-					cd.Queue.Add(key)
-				}
-			}
-		},
-	}
 }
